@@ -142,7 +142,22 @@
         
           function toPrompt(phrase) {
             const s = cleanNulls(phrase).replace(/^the first\s+/i, "");
-            const firstChar = s.trim().charAt(0).toLowerCase();
+            const trimmed = s.trim();
+            const firstWord = trimmed.split(/\s+/)[0].toLowerCase();
+            
+            // Special cases that override vowel rule - check these FIRST
+            // Handle hyphenated terms like "user-curated" or "nft-collection"
+            if (firstWord === "user" || firstWord.startsWith("user-")) {
+              // "User" (and hyphenated variants) always uses "a" (overrides vowel rule)
+              return /^(a|an|the)\s+/i.test(s) ? `Make ${s}` : `Hey Claude, make a ${s}`;
+            }
+            if (firstWord === "nft") {
+              // "NFT" always uses "an" (overrides vowel rule)
+              return /^(a|an|the)\s+/i.test(s) ? `Make ${s}` : `Hey Claude, make an ${s}`;
+            }
+            
+            // Regular vowel rule (only runs if special cases don't match)
+            const firstChar = trimmed.charAt(0).toLowerCase();
             if (/^[aeiou]/.test(firstChar)) {
               return `Hey Claude, make an ${s}`;
             }
