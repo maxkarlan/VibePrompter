@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Vibe Prompter</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: system-ui, -apple-system, sans-serif;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                padding: 0;
+            }
+            
+            #content {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                padding-bottom: 80px; /* Space for fixed button */
+            }
+            
+            #prompt-container {
+                max-width: 900px;
+                width: 85%;
+                left: 7.5%;
+                text-align: center;
+            }
+            
+            #prompt {
+                font-size: 18px;
+                line-height: 1.6;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                hyphens: auto;
+            }
+            
+            #meta {
+                margin-top: 16px;
+                font-size: 12px;
+                opacity: 0.7;
+            }
+            
+            code {
+                background: #f6f6f6;
+                padding: 2px 6px;
+                border-radius: 6px;
+            }
+            
+            #btn {
+                position: fixed;
+                bottom: 10%;
+                left: 37.5%;
+                right: 0;
+                width: 25%;
+                padding: 16px;
+                font-size: 16px;
+                cursor: pointer;
+                border: none;
+                background: #000;
+                color: #fff;
+                font-family: inherit;
+                transition: background 0.2s;
+                border-radius: 8px;
+            }
+            
+            #btn:hover {
+                background: #333;
+            }
+            
+            #btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="content">
+            <div id="prompt-container">
+                <div id="prompt"></div>
+                <div id="meta"></div>
+            </div>
+        </div>
+        <button id="btn">Vibe</button>
+
+        <!-- Ethers v6 via CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+        <script>
+          // RPC endpoints with failover
+          const RPC_ENDPOINTS = [
+            "https://eth.llamarpc.com",
+            "https://ethereum.publicnode.com",
+            "https://eth-mainnet.public.blastapi.io"
+          ];
+          
+          const FIRST_CONTRACT = "0xc9Cb0FEe73f060Db66D2693D92d75c825B1afdbF";
+        
+          const ABI = [
+            "function getString(uint256 id) view returns (string)"
+          ];
+        
+          let provider = null;
+          let first = null;
+          let currentRpcIndex = 0;
+        
+          const btn = document.getElementById("btn");
+          const promptEl = document.getElementById("prompt");
+          const metaEl = document.getElementById("meta");
+          
+          // Initialize provider with first endpoint
+          async function initProvider() {
+            if (!provider) {
+              provider = new ethers.JsonRpcProvider(RPC_ENDPOINTS[currentRpcIndex]);
+              first = new ethers.Contract(FIRST_CONTRACT, ABI, provider);
+            }
+          }
+          
+          // Rotate to next endpoint on failure
+          async function rotateEndpoint() {
+            currentRpcIndex = (currentRpcIndex + 1) % RPC_ENDPOINTS.length;
+            provider = new ethers.JsonRpcProvider(RPC_ENDPOINTS[currentRpcIndex]);
+            first = new ethers.Contract(FIRST_CONTRACT, ABI, provider);
+          }
+        
+          function randomId() {
+            const arr = new Uint32Array(1);
+            crypto.getRandomValues(arr);
+            return (arr[0] % 999999) + 1;
+          }
+        
+          function cleanNulls(s) {
+            return s.replace(/\u0000+.*$/s, "").trim();
+          }
+        
+          function toPrompt(phrase) {
+            const s = cleanNulls(phrase).replace(/^the first\s+/i, "");
+            const firstChar = s.trim().charAt(0).toLowerCase();
+            if (/^[aeiou]/.test(firstChar)) {
+              return `Hey Claude, make an ${s}`;
+            }
+            return /^(a|an|the)\s+/i.test(s) ? `Make ${s}` : `Hey Claude, make a ${s}`;
+          }
+        
+          async function press() {
+            btn.disabled = true;
+            btn.textContent = "Loading…";
+            promptEl.textContent = "";
+            metaEl.textContent = "";
+        
+            try {
+              // Initialize provider if needed
+              if (!provider || !first) {
+                await initProvider();
+              }
+        
+              const maxAttempts = RPC_ENDPOINTS.length;
+              let attempts = 0;
+              let lastError = null;
+        
+              while (attempts < maxAttempts) {
+                try {
+                  const id = randomId();
+                  const phrase = await first.getString(id, { gasLimit: 2_500_000 });
+                  const prompt = toPrompt(phrase);
+        
+                  promptEl.textContent = prompt;
+                  metaEl.innerHTML = `Source: FIRST generator · id <code>${id}</code>`;
+                  return; // Success, exit function
+                } catch (err) {
+                  lastError = err;
+                  attempts++;
+                  
+                  // If not the last attempt, rotate to next endpoint
+                  if (attempts < maxAttempts) {
+                    await rotateEndpoint();
+                  }
+                }
+              }
+        
+              // All endpoints failed
+              promptEl.textContent = "Error: " + (lastError?.message || String(lastError));
+              metaEl.textContent = "Failed to connect to any RPC endpoint. Please try again.";
+            } finally {
+              btn.disabled = false;
+              btn.textContent = "Vibe";
+            }
+          }
+        
+          btn.addEventListener("click", press);
+        </script>        
+    </body>
+</html>
