@@ -186,7 +186,7 @@
                   const phrase = await first.getString(id, { gasLimit: 2_500_000 });
                   const prompt = toPrompt(phrase);
         
-                  promptEl.textContent = prompt;
+                  promptEl.textContent = prompt + " Make no mistakes.";
                   metaEl.innerHTML = `Source: FIRST generator · id <code>${id}</code>`;
                   return; // Success, exit function
                 } catch (err) {
